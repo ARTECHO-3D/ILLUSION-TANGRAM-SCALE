@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tangram Rescale Demo</title>
+  <style>
+    :root {
+      --bg: #ececec;
+      --panel: #ffffff;
+      --line: #d4d4d8;
+      --text: #18181b;
+      --muted: #6b7280;
+      --accent: #111827;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f5f5f5;
+      color: var(--text);
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+      overflow: hidden;
+    }
+    .side {
+      padding: 16px;
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+    }
+    .side.collapsed {
+      display: none;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 22px;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .section {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      margin-top: 14px;
+      background: #fff;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 8px 0;
+    }
+    .wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    button, select, input[type="range"], input[type="number"] {
+      font: inherit;
+    }
+    button {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    button:hover { background: #fafafa; }
+    button.active {
+      background: #111827;
+      color: white;
+      border-color: #111827;
+    }
+    .full { width: 100%; }
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .grid3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #f4f4f5;
+      border: 1px solid var(--line);
+      font-size: 12px;
+    }
+    .viewer {
+      position: relative;
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+      min-height: 78vh;
+      background: var(--bg);
+    }
+    svg {
+      width: 100%;
+      height: calc(100vh - 32px);
+      min-height: 78vh;
+      display: block;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .viewer-toolbar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 5;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .viewer-toolbar .toolchip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      backdrop-filter: blur(6px);
+    }
+    .viewer-toolbar input[type="number"] {
+      width: 76px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 6px 8px;
+      background: white;
+    }
+    .kv {
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 2px 0;
+    }
+    .tiny {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; }
+      svg { height: 68vh; min-height: 68vh; }
+      .viewer { min-height: 68vh; }
+      .side { max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Session log — Europe/Paris — 2026-03-19 -->
+  <div class="app" id="app">
+    <div class="panel side" id="sidePanel">
+      <h1>Tangram rescale demo</h1>
+      <div class="muted">Single-file HTML version for local browser use. Drag pieces in the SVG area. You can rescale any piece and read its edge fractions.</div>
+
+      <div class="section">
+        <div class="row">
+          <label for="guideCheck">Guide square</label>
+          <input id="guideCheck" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="gridCheck">Grid</label>
+          <input id="gridCheck" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="snapCheck">Snap 10 px</label>
+          <input id="snapCheck" type="checkbox" />
+        </div>
+        <div class="row">
+          <label for="snapGridScale">Snap step</label>
+          <input id="snapGridScale" type="number" min="1" max="200" step="1" value="10" style="width:76px;" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Pieces</h2>
+        <div class="wrap" id="pieceButtons"></div>
+        <div class="grid2" style="margin-top:10px;">
+          <button id="selectNoneBtn">Deselect</button>
+          <button id="removePieceBtn">Remove piece</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="row">
+          <div>
+            <div id="selectedName"><strong>Large A</strong></div>
+            <div class="tiny" id="selectedKind">largeTri</div>
+          </div>
+          <span class="badge" id="selectedScaleBadge">scale 1.000</span>
+        </div>
+
+        <div class="row">
+          <label for="scaleRange">Scale</label>
+          <span id="scaleText">1.000</span>
+        </div>
+        <input id="scaleRange" class="full" type="range" min="0.25" max="3" step="0.005" value="1" />
+
+        <div class="grid2" style="margin-top:10px;">
+          <button id="rotMinus">Rotate -45°</button>
+          <button id="rotPlus">Rotate +45°</button>
+          <button id="mirrorBtn">Mirror</button>
+          <button id="resetPieceBtn">Reset piece</button>
+        </div>
+
+        <div class="grid3" style="margin-top:10px;">
+          <button id="leftBtn">←</button>
+          <button id="upBtn">↑</button>
+          <button id="rightBtn">→</button>
+        </div>
+        <div class="grid3" style="margin-top:8px;">
+          <div></div>
+          <button id="downBtn">↓</button>
+          <div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Readout</h2>
+        <div class="kv" id="totalAreaRow"></div>
+        <div class="kv" id="guideSideRow"></div>
+        <div class="kv" id="centerRow"></div>
+        <div class="kv" id="rotationRow"></div>
+        <div class="kv" id="mirrorRow"></div>
+      </div>
+
+      <div class="section">
+        <h2>Selected shape details</h2>
+        <div class="row">
+          <label for="edgeModeSelect">Edge reading mode</label>
+          <select id="edgeModeSelect" style="width:130px;">
+            <option value="longest">Longest edge</option>
+            <option value="iso">Iso edge</option>
+          </select>
+        </div>
+        <div class="kv" id="selectedAreaRow"></div>
+        <div class="kv" id="selectedPerimeterRow"></div>
+        <div class="kv" id="longestEdgeRow"></div>
+        <div class="row">
+          <label for="longestEdgeInput">Longest edge target</label>
+          <input id="longestEdgeInput" type="number" min="1" step="0.1" value="0" style="width:96px;" />
+        </div>
+        <button id="applyLongestEdgeBtn" class="full">Apply longest-edge scale</button>
+        <div class="tiny">This rescales the selected piece so the chosen edge mode matches the value you enter.</div>
+      </div>
+
+      <div class="section">
+        <h2>Configuration surface</h2>
+        <div class="kv" id="configTotalAreaRow"></div>
+        <div class="kv" id="configPieceCountRow"></div>
+        <div class="kv" id="configAverageAreaRow"></div>
+        <div class="kv" id="configCoverageRow"></div>
+        <div class="kv" id="configMissingAreaRow"></div>
+        <div class="kv" id="configEfficiencyRow"></div>
+      </div>
+
+      <div class="section">
+        <h2>Selected piece surface</h2>
+        <div class="kv" id="selectedSurfaceAreaRow"></div>
+        <div class="kv" id="selectedSurfacePercentRow"></div>
+        <div class="kv" id="selectedSurfaceContributionRow"></div>
+        <div class="kv" id="selectedSurfaceBarRow"></div>
+      </div>
+
+      <div class="section">
+        <h2>Edge-fraction readout</h2>
+        <div class="kv" id="edgeLengthsRow"></div>
+        <div class="kv" id="edgeFractionsRow"></div>
+        <div class="kv" id="edgeClassRow"></div>
+        <div class="tiny">Fractions are normalized by the shortest edge of the selected piece. This is useful for your parser logic.</div>
+      </div>
+
+      <div class="section">
+        <h2>Illusion analysis</h2>
+        <div class="row">
+          <label for="analysisModeSelect">Mode</label>
+          <select id="analysisModeSelect" style="width:160px;">
+            <option value="single" selected>Single configuration</option>
+            <option value="compare">Compare saved configs</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="gapToleranceInput">Gap tolerance</label>
+          <input id="gapToleranceInput" type="number" min="0" step="0.1" value="1.25" style="width:110px;" />
+        </div>
+        <div class="kv" id="analysisAreaRow"></div>
+        <div class="kv" id="analysisGapsRow"></div>
+        <div class="kv" id="analysisGapDistanceRow"></div>
+        <div class="kv" id="analysisSeamlessRow"></div>
+        <div class="kv" id="analysisIllusionRow"></div>
+        <div class="kv" id="analysisReferenceRow"></div>
+      </div>
+
+      <div class="section">
+        <h2>Seamlessness readout</h2>
+        <div class="kv" id="totalGapsRow"></div>
+        <div class="kv" id="seamlessScoreRow"></div>
+        <div class="kv" id="gapVisualsRow"></div>
+      </div>
+
+      <div class="section">
+        <h2>Advanced snap feedback</h2>
+        <div class="kv" id="snapModeRow"></div>
+        <div class="kv" id="snapTargetRow"></div>
+        <div class="kv" id="snapGapRow"></div>
+        <div class="kv" id="snapMismatchRow"></div>
+        <div class="kv" id="snapConfidenceRow"></div>
+        <div class="kv" id="snapStatusRow"></div>
+      </div>
+
+      <div class="section">
+        <h2>Vertex mismatch analysis</h2>
+        <div class="kv" id="mismatchEdgeRow"></div>
+        <div class="kv" id="mismatchSnappedRow"></div>
+        <div class="kv" id="mismatchOppositeRow"></div>
+        <div class="kv" id="mismatchRatioRow"></div>
+        <div class="kv" id="mismatchAngleRow"></div>
+        <div class="kv" id="mismatchPotentialRow"></div>
+        <div class="tiny">Opposite vertex gaps quantify illusion potential and highlight asymmetry.</div>
+      </div>
+
+      <div class="section">
+        <h2>Saved configurations</h2>
+        <div class="row">
+          <label for="configNameInput">Name</label>
+          <input id="configNameInput" type="text" placeholder="arrow-illusion" style="width:170px; padding:6px 8px; border:1px solid #d4d4d8; border-radius:10px;" />
+        </div>
+        <div class="grid2">
+          <button id="captureConfigBtn">Capture config</button>
+          <button id="syncConfigsBtn">Sync library</button>
+        </div>
+        <div id="configList" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="section" id="comparisonPanel" style="display:none;">
+        <h2>Configuration comparison</h2>
+        <div class="grid2">
+          <select id="configSelectA"></select>
+          <select id="configSelectB"></select>
+        </div>
+        <button id="compareConfigsBtn" class="full">Compare saved configs</button>
+        <div class="kv" id="comparisonAreaDiffRow"></div>
+        <div class="kv" id="comparisonSeamlessRow"></div>
+        <div class="kv" id="comparisonGapEquivRow"></div>
+        <div class="kv" id="comparisonIllusionRow"></div>
+      </div>
+
+      <div class="section">
+        <h2>Spawn piece</h2>
+        <div class="grid2">
+          <select id="spawnKindSelect">
+            <option value="largeTri">Large triangle</option>
+            <option value="mediumTri">Medium triangle</option>
+            <option value="smallTri">Small triangle</option>
+            <option value="square">Square</option>
+            <option value="lozenge">Lozenge</option>
+          </select>
+          <button id="spawnPieceBtn">Spawn</button>
+        </div>
+        <div class="tiny">New pieces appear near the guide square center and get selected automatically.</div>
+      </div>
+
+      <div class="section">
+        <h2>Save / load</h2>
+        <div class="row">
+          <label for="saveNameInput">Name</label>
+          <input id="saveNameInput" type="text" value="tangram-save-01" style="width:170px; padding:6px 8px; border:1px solid #d4d4d8; border-radius:10px;" />
+        </div>
+        <div class="grid2">
+          <button id="saveLocalBtn">Save local</button>
+          <button id="loadLocalBtn">Load local</button>
+          <button id="exportJsonBtn">Export JSON</button>
+          <button id="importJsonBtn">Import JSON</button>
+        </div>
+        <div class="tiny" id="saveStatusRow">No save action yet.</div>
+        <input id="importJsonInput" type="file" accept="application/json,.json" style="display:none;" />
+      </div>
+
+      <div class="section">
+        <h2>Presets</h2>
+        <div class="grid2">
+          <button id="presetScatter">Scatter</button>
+          <button id="presetSquare">Square-ish pack</button>
+        </div>
+      </div>
+
+      <button id="resetAllBtn" class="full" style="margin-top:14px;">Reset full demo</button>
+    </div>
+
+    <div class="panel viewer">
+      <div class="viewer-toolbar">
+        <button id="toggleToolsBtn">Hide tools</button>
+        <div class="toolchip">
+          <label for="gridSizeInput">Tile</label>
+          <input id="gridSizeInput" type="number" min="4" max="80" step="1" value="20" />
+          <button id="applyGridBtn">Apply</button>
+        </div>
+        <div class="toolchip">
+          <label for="zoomInput">Zoom</label>
+          <input id="zoomInput" type="number" min="0.25" max="4" step="0.05" value="1" />
+          <button id="applyZoomBtn">Apply</button>
+        </div>
+        <div class="toolchip">
+          <label for="strokeWidthInput">Edge</label>
+          <input id="strokeWidthInput" type="number" min="0.5" max="12" step="0.5" value="2" />
+        </div>
+        <div class="toolchip">
+          <label for="snapModeSelect">Snap mode</label>
+          <select id="snapModeSelect">
+            <option value="grid">Grid only</option>
+            <option value="edge">Edge snap</option>
+            <option value="closest-edge">Closest edge align</option>
+            <option value="closest-vertex">Closest vertex align</option>
+            <option value="hybrid">Hybrid (edge+vertex)</option>
+          </select>
+        </div>
+      </div>
+      <svg id="svg" viewBox="0 0 800 560" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="gridPattern" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#00000020" stroke-width="1" />
+          </pattern>
+        </defs>
+        <rect id="gridRect" x="0" y="0" width="800" height="560" fill="url(#gridPattern)" />
+        <rect id="guideRect" x="300" y="180" width="200" height="200" fill="none" stroke="#00000066" stroke-dasharray="8 8" stroke-width="2" />
+        <g id="gapLayer"></g>
+        <g id="piecesLayer"></g>
+        <g id="mismatchLayer"></g>
+      </svg>
+    </div>
+  </div>
+
+  <script>
+    const SQ = 80;
+    const H = SQ / 2;
+    const SMALL_TRI_AREA = (H * H) / 2;
+    const ILLUSION_REFERENCE_AREA = SMALL_TRI_AREA / 2;
+    const FULL_TANGRAM_AREA = (SQ * SQ) / 2;
+
+    const SHAPES = {
+      largeTri: [
+        [-SQ / 2, -SQ / 2],
+        [ SQ / 2, -SQ / 2],
+        [-SQ / 2,  SQ / 2]
+      ],
+      mediumTri: [
+        [-H / 2, -H / 2],
+        [ H / 2, -H / 2],
+        [-H / 2,  H / 2]
+      ],
+      smallTri: [
+        [-H / 2, -H / 2],
+        [ H / 2, -H / 2],
+        [-H / 2,  H / 2]
+      ],
+      square: [
+        [-H / 2, -H / 2],
+        [ H / 2, -H / 2],
+        [ H / 2,  H / 2],
+        [-H / 2,  H / 2]
+      ],
+      lozenge: [
+        [-H / 2, 0],
+        [0, -H / 2],
+        [H / 2, 0],
+        [0, H / 2]
+      ]
+    };
+
+    const COLORS = {
+      largeA: "#7c1d87",
+      largeB: "#c48a12",
+      medium: "#0f7a1b",
+      smallA: "#2948ff",
+      smallB: "#e11d48",
+      square: "#e7a36d",
+      lozenge: "#b8bf1a"
+    };
+
+    const INITIAL = [
+      { id: "largeA", label: "Large A", kind: "largeTri", x: 220, y: 130, rot: 0, scale: 1, mirror: false, color: COLORS.largeA },
+      { id: "largeB", label: "Large B", kind: "largeTri", x: 220, y: 370, rot: 180, scale: 1, mirror: false, color: COLORS.largeB },
+      { id: "medium", label: "Medium", kind: "mediumTri", x: 380, y: 290, rot: 45, scale: 1, mirror: false, color: COLORS.medium },
+      { id: "smallA", label: "Small A", kind: "smallTri", x: 300, y: 250, rot: 90, scale: 1, mirror: false, color: COLORS.smallA },
+      { id: "smallB", label: "Small B", kind: "smallTri", x: 450, y: 420, rot: 225, scale: 1, mirror: false, color: COLORS.smallB },
+      { id: "square", label: "Square", kind: "square", x: 300, y: 150, rot: 0, scale: 1, mirror: false, color: COLORS.square },
+      { id: "lozenge", label: "Lozenge", kind: "lozenge", x: 480, y: 270, rot: 45, scale: 1, mirror: false, color: COLORS.lozenge }
+    ];
+
+    let pieces = JSON.parse(JSON.stringify(INITIAL));
+    let selectedId = "largeA";
+    let drag = null;
+    let zoomLevel = 1;
+    let baseStrokeWidth = 2;
+    let renderQueued = false;
+    let lastGapResult = null;
+    let lastVertexMismatch = null;
+
+    const pieceButtons = document.getElementById("pieceButtons");
+    const piecesLayer = document.getElementById("piecesLayer");
+    const gapLayer = document.getElementById("gapLayer");
+    const mismatchLayer = document.getElementById("mismatchLayer");
+    const svg = document.getElementById("svg");
+    const guideRect = document.getElementById("guideRect");
+    const gridRect = document.getElementById("gridRect");
+
+    const guideCheck = document.getElementById("guideCheck");
+    const toggleToolsBtn = document.getElementById("toggleToolsBtn");
+    const sidePanel = document.getElementById("sidePanel");
+    const app = document.getElementById("app");
+    const gridSizeInput = document.getElementById("gridSizeInput");
+    const applyGridBtn = document.getElementById("applyGridBtn");
+    const snapGridScale = document.getElementById("snapGridScale");
+    const zoomInput = document.getElementById("zoomInput");
+    const applyZoomBtn = document.getElementById("applyZoomBtn");
+    const strokeWidthInput = document.getElementById("strokeWidthInput");
+    const longestEdgeInput = document.getElementById("longestEdgeInput");
+    const applyLongestEdgeBtn = document.getElementById("applyLongestEdgeBtn");
+    const edgeModeSelect = document.getElementById("edgeModeSelect");
+    const spawnKindSelect = document.getElementById("spawnKindSelect");
+    const spawnPieceBtn = document.getElementById("spawnPieceBtn");
+    const selectNoneBtn = document.getElementById("selectNoneBtn");
+    const removePieceBtn = document.getElementById("removePieceBtn");
+    const saveNameInput = document.getElementById("saveNameInput");
+    const saveLocalBtn = document.getElementById("saveLocalBtn");
+    const loadLocalBtn = document.getElementById("loadLocalBtn");
+    const exportJsonBtn = document.getElementById("exportJsonBtn");
+    const importJsonBtn = document.getElementById("importJsonBtn");
+    const importJsonInput = document.getElementById("importJsonInput");
+    const saveStatusRow = document.getElementById("saveStatusRow");
+    const gridCheck = document.getElementById("gridCheck");
+    const snapCheck = document.getElementById("snapCheck");
+    const scaleRange = document.getElementById("scaleRange");
+    const scaleText = document.getElementById("scaleText");
+    const selectedName = document.getElementById("selectedName");
+    const selectedKind = document.getElementById("selectedKind");
+    const selectedScaleBadge = document.getElementById("selectedScaleBadge");
+    const analysisModeSelect = document.getElementById("analysisModeSelect");
+    const gapToleranceInput = document.getElementById("gapToleranceInput");
+    const totalGapsRow = document.getElementById("totalGapsRow");
+    const seamlessScoreRow = document.getElementById("seamlessScoreRow");
+    const gapVisualsRow = document.getElementById("gapVisualsRow");
+    const analysisAreaRow = document.getElementById("analysisAreaRow");
+    const analysisGapsRow = document.getElementById("analysisGapsRow");
+    const analysisGapDistanceRow = document.getElementById("analysisGapDistanceRow");
+    const analysisSeamlessRow = document.getElementById("analysisSeamlessRow");
+    const analysisIllusionRow = document.getElementById("analysisIllusionRow");
+    const analysisReferenceRow = document.getElementById("analysisReferenceRow");
+    const configTotalAreaRow = document.getElementById("configTotalAreaRow");
+    const configPieceCountRow = document.getElementById("configPieceCountRow");
+    const configAverageAreaRow = document.getElementById("configAverageAreaRow");
+    const configCoverageRow = document.getElementById("configCoverageRow");
+    const configMissingAreaRow = document.getElementById("configMissingAreaRow");
+    const configEfficiencyRow = document.getElementById("configEfficiencyRow");
+    const selectedSurfaceAreaRow = document.getElementById("selectedSurfaceAreaRow");
+    const selectedSurfacePercentRow = document.getElementById("selectedSurfacePercentRow");
+    const selectedSurfaceContributionRow = document.getElementById("selectedSurfaceContributionRow");
+    const selectedSurfaceBarRow = document.getElementById("selectedSurfaceBarRow");
+    const mismatchEdgeRow = document.getElementById("mismatchEdgeRow");
+    const mismatchSnappedRow = document.getElementById("mismatchSnappedRow");
+    const mismatchOppositeRow = document.getElementById("mismatchOppositeRow");
+    const mismatchRatioRow = document.getElementById("mismatchRatioRow");
+    const mismatchAngleRow = document.getElementById("mismatchAngleRow");
+    const mismatchPotentialRow = document.getElementById("mismatchPotentialRow");
+    const configNameInput = document.getElementById("configNameInput");
+    const captureConfigBtn = document.getElementById("captureConfigBtn");
+    const syncConfigsBtn = document.getElementById("syncConfigsBtn");
+    const configList = document.getElementById("configList");
+    const comparisonPanel = document.getElementById("comparisonPanel");
+    const configSelectA = document.getElementById("configSelectA");
+    const configSelectB = document.getElementById("configSelectB");
+    const compareConfigsBtn = document.getElementById("compareConfigsBtn");
+    const comparisonAreaDiffRow = document.getElementById("comparisonAreaDiffRow");
+    const comparisonSeamlessRow = document.getElementById("comparisonSeamlessRow");
+    const comparisonGapEquivRow = document.getElementById("comparisonGapEquivRow");
+    const comparisonIllusionRow = document.getElementById("comparisonIllusionRow");
+    const snapModeSelect = document.getElementById("snapModeSelect");
+    const snapModeRow = document.getElementById("snapModeRow");
+    const snapTargetRow = document.getElementById("snapTargetRow");
+    const snapGapRow = document.getElementById("snapGapRow");
+    const snapMismatchRow = document.getElementById("snapMismatchRow");
+    const snapConfidenceRow = document.getElementById("snapConfidenceRow");
+    const snapStatusRow = document.getElementById("snapStatusRow");
+
+    const savedConfigs = [];
+    let snapFeedback = {
+      mode: "grid",
+      targetPiece: null,
+      targetType: "none",
+      gap: 0,
+      confidence: 0,
+      status: "idle",
+      mismatch: null
+    };
+
+    function cloneInitial() {
+      return JSON.parse(JSON.stringify(INITIAL));
+    }
+
+    function selectedPiece() {
+      if (!selectedId) return null;
+      return pieces.find(p => p.id === selectedId) || null;
+    }
+
+    function rotatePoint(x, y, deg) {
+      const r = deg * Math.PI / 180;
+      const c = Math.cos(r);
+      const s = Math.sin(r);
+      return [x * c - y * s, x * s + y * c];
+    }
+
+    function transformedPoints(piece) {
+      const base = SHAPES[piece.kind];
+      return base.map(([px, py]) => {
+        const mx = piece.mirror ? -px : px;
+        const [rx, ry] = rotatePoint(mx * piece.scale, py * piece.scale, piece.rot);
+        return [rx + piece.x, ry + piece.y];
+      });
+    }
+
+    function pointsStr(points) {
+      return points.map(([x, y]) => `${x},${y}`).join(" ");
+    }
+
+    function pieceArea(piece) {
+      const s2 = piece.scale * piece.scale;
+      switch (piece.kind) {
+        case "largeTri": return (SQ * SQ) / 2 * s2;
+        case "mediumTri": return (H * H) / 2 * s2;
+        case "smallTri": return (H * H) / 2 * s2;
+        case "square": return H * H * s2;
+        case "lozenge": return (H * H) / 2 * s2;
+        default: return 0;
+      }
+    }
+
+    function totalArea() {
+      return pieces.reduce((a, p) => a + pieceArea(p), 0);
+    }
+
+    function edgeLengths(piece) {
+      const pts = transformedPoints(piece);
+      const lengths = [];
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i];
+        const b = pts[(i + 1) % pts.length];
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        lengths.push(Math.hypot(dx, dy));
+      }
+      return lengths;
+    }
+
+    function fractionReadout(piece) {
+      const lengths = edgeLengths(piece);
+      const sorted = [...lengths].sort((a, b) => a - b);
+      const base = sorted[0] || 1;
+      const fractions = lengths.map(v => v / base);
+      const sortedFractions = sorted.map(v => v / base);
+      return {
+        lengths,
+        fractions,
+        sortedFractions,
+        base
+      };
+    }
+
+    function selectedEdgeMetric(piece) {
+      const fr = fractionReadout(piece);
+      const sorted = [...fr.lengths].sort((a, b) => a - b);
+      const mode = edgeModeSelect.value;
+      if (mode === "iso") {
+        if (piece.kind === "square") return sorted[0];
+        if (piece.kind === "lozenge") return sorted[0];
+        if (fr.lengths.length >= 3) return sorted[1];
+        return sorted[0];
+      }
+      return Math.max(...fr.lengths);
+    }
+
+    function approxClass(sortedFractions) {
+      const fmt = sortedFractions.map(v => v.toFixed(3)).join(" : ");
+      return `normalized ${fmt}`;
+    }
+
+    function calculateConfigurationMetrics() {
+      const total = totalArea();
+      const count = pieces.length;
+      const average = count > 0 ? total / count : 0;
+      const coverage = FULL_TANGRAM_AREA > 0 ? Math.min(100, Math.max(0, (total / FULL_TANGRAM_AREA) * 100)) : 0;
+      const missing = Math.max(0, FULL_TANGRAM_AREA - total);
+      const efficiency = coverage / 100;
+      return { total, count, average, coverage, missing, efficiency, reference: FULL_TANGRAM_AREA };
+    }
+
+    function contributionLevel(percent) {
+      if (percent >= 20) return "HIGH";
+      if (percent >= 10) return "MEDIUM";
+      if (percent >= 5) return "LOW";
+      return "MINOR";
+    }
+
+    function surfaceBar(percent) {
+      const length = 20;
+      const filled = Math.min(length, Math.max(0, Math.round((percent / 100) * length)));
+      const empty = length - filled;
+      return `[${"#".repeat(filled)}${"-".repeat(empty)}] ${percent.toFixed(1)}%`;
+    }
+
+    function updateConfigurationSurfaceUI(metrics) {
+      configTotalAreaRow.textContent = `Total area: ${metrics.total.toFixed(2)} px²`;
+      configPieceCountRow.textContent = `Piece count: ${metrics.count}`;
+      configAverageAreaRow.textContent = `Average area: ${metrics.average.toFixed(2)} px²`;
+      configCoverageRow.textContent = `Coverage: ${metrics.coverage.toFixed(1)}% of ${metrics.reference.toFixed(2)} px²`;
+      const missingPercent = Math.max(0, 100 - metrics.coverage);
+      configMissingAreaRow.textContent = `Missing area: ${metrics.missing.toFixed(2)} px² (${missingPercent.toFixed(1)}%)`;
+      configEfficiencyRow.textContent = `Surface efficiency: ${(metrics.efficiency * 100).toFixed(1)}%`;
+    }
+
+    function updateSelectedSurfaceUI(piece, metrics) {
+      if (!piece) {
+        selectedSurfaceAreaRow.textContent = "Select a piece to see its surface breakdown.";
+        selectedSurfacePercentRow.textContent = "";
+        selectedSurfaceContributionRow.textContent = "";
+        selectedSurfaceBarRow.textContent = "";
+        return;
+      }
+      const area = pieceArea(piece);
+      const percent = metrics.total > 0 ? (area / metrics.total) * 100 : 0;
+      selectedSurfaceAreaRow.textContent = `Individual area: ${area.toFixed(2)} px²`;
+      selectedSurfacePercentRow.textContent = `Percent of total: ${percent.toFixed(1)}%`;
+      selectedSurfaceContributionRow.textContent = `Contribution level: ${contributionLevel(percent)}`;
+      selectedSurfaceBarRow.textContent = `Surface bar: ${surfaceBar(percent)}`;
+    }
+
+    function updateSurfaceReadouts(piece) {
+      const metrics = calculateConfigurationMetrics();
+      updateConfigurationSurfaceUI(metrics);
+      updateSelectedSurfaceUI(piece, metrics);
+    }
+
+    function refreshSelectionControls() {
+      const hasSelection = !!selectedPiece();
+      removePieceBtn.disabled = !hasSelection;
+      selectNoneBtn.disabled = !hasSelection;
+    }
+
+    function updateReadout() {
+      const p = selectedPiece();
+      const area = totalArea();
+      const side = Math.sqrt(area || 0);
+      const modeLabel = edgeModeSelect.value === "iso" ? "Iso edge" : "Longest edge";
+
+      selectedName.innerHTML = `<strong>${p ? p.label : "None"}</strong>`;
+      selectedKind.textContent = p ? p.kind : "no selection";
+      selectedScaleBadge.textContent = p ? `scale ${p.scale.toFixed(3)}` : "scale n/a";
+      if (p) {
+        scaleRange.value = p.scale;
+        scaleText.textContent = p.scale.toFixed(3);
+      } else {
+        scaleRange.value = 1;
+        scaleText.textContent = "n/a";
+      }
+
+      document.getElementById("totalAreaRow").textContent = `Total piece area: ${area.toFixed(2)}`;
+      document.getElementById("guideSideRow").textContent = `Equivalent guide square side: ${side.toFixed(2)}`;
+      if (p) {
+        document.getElementById("centerRow").textContent = `Selected center: (${p.x.toFixed(1)}, ${p.y.toFixed(1)})`;
+        document.getElementById("rotationRow").textContent = `Selected rotation: ${p.rot}°`;
+        document.getElementById("mirrorRow").textContent = `Selected mirror: ${p.mirror ? "yes" : "no"}`;
+      } else {
+        document.getElementById("centerRow").textContent = "Selected center: n/a";
+        document.getElementById("rotationRow").textContent = "Selected rotation: n/a";
+        document.getElementById("mirrorRow").textContent = "Selected mirror: n/a";
+      }
+
+      if (p) {
+        const fr = fractionReadout(p);
+        const pieceAreaValue = pieceArea(p);
+        const perimeter = fr.lengths.reduce((a, v) => a + v, 0);
+        const chosenEdge = selectedEdgeMetric(p);
+        document.getElementById("selectedAreaRow").textContent = `Selected area: ${pieceAreaValue.toFixed(3)}`;
+        document.getElementById("selectedPerimeterRow").textContent = `Selected perimeter: ${perimeter.toFixed(3)}`;
+        document.getElementById("longestEdgeRow").textContent = `${modeLabel}: ${chosenEdge.toFixed(3)}`;
+        if (document.activeElement !== longestEdgeInput) {
+          longestEdgeInput.value = chosenEdge.toFixed(3);
+        }
+        document.getElementById("edgeLengthsRow").textContent = `Edge lengths: ${fr.lengths.map(v => v.toFixed(3)).join(" , ")}`;
+        document.getElementById("edgeFractionsRow").textContent = `Shortest-edge fractions: ${fr.fractions.map(v => v.toFixed(3)).join(" , ")}`;
+        document.getElementById("edgeClassRow").textContent = `Edge class: ${approxClass(fr.sortedFractions)}`;
+      } else {
+        document.getElementById("selectedAreaRow").textContent = "Select a piece to view its area.";
+        document.getElementById("selectedPerimeterRow").textContent = "";
+        document.getElementById("longestEdgeRow").textContent = modeLabel + ": n/a";
+        if (document.activeElement !== longestEdgeInput) {
+          longestEdgeInput.value = "";
+        }
+        document.getElementById("edgeLengthsRow").textContent = "";
+        document.getElementById("edgeFractionsRow").textContent = "";
+        document.getElementById("edgeClassRow").textContent = "";
+      }
+
+      guideRect.setAttribute("x", (400 - side / 2).toFixed(3));
+      guideRect.setAttribute("y", (280 - side / 2).toFixed(3));
+      guideRect.setAttribute("width", side.toFixed(3));
+      guideRect.setAttribute("height", side.toFixed(3));
+      guideRect.style.display = guideCheck.checked ? "block" : "none";
+      gridRect.style.display = gridCheck.checked ? "block" : "none";
+      svg.setAttribute("viewBox", `0 0 ${800 / zoomLevel} ${560 / zoomLevel}`);
+      updateSurfaceReadouts(p);
+      refreshSelectionControls();
+    }
+
+    function colorForKind(kind) {
+      if (kind === "largeTri") return COLORS.largeA;
+      if (kind === "mediumTri") return COLORS.medium;
+      if (kind === "smallTri") return COLORS.smallA;
+      if (kind === "square") return COLORS.square;
+      return COLORS.lozenge;
+    }
+
+    function nextPieceLabel(kind) {
+      const same = pieces.filter(p => p.kind === kind).length + 1;
+      const map = {
+        largeTri: `Large ${same}`,
+        mediumTri: `Medium ${same}`,
+        smallTri: `Small ${same}`,
+        square: `Square ${same}`,
+        lozenge: `Lozenge ${same}`
+      };
+      return map[kind];
+    }
+
+    function snapPoint(nx, ny) {
+      if (!snapCheck.checked) return [nx, ny];
+      const step = currentSnapStep();
+      return [Math.round(nx / step) * step, Math.round(ny / step) * step];
+    }
+
+    function pointSegmentDistance(px, py, ax, ay, bx, by) {
+      const abx = bx - ax;
+      const aby = by - ay;
+      const apx = px - ax;
+      const apy = py - ay;
+      const ab2 = abx * abx + aby * aby;
+      const t = ab2 === 0 ? 0 : Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2));
+      const qx = ax + abx * t;
+      const qy = ay + aby * t;
+      return { dist: Math.hypot(px - qx, py - qy), qx, qy };
+    }
+
+    function snapSelectedToEdge() {
+      const moving = selectedPiece();
+      if (!moving) return;
+      const info = findClosestEdgePair(moving);
+      if (!info) return;
+      const tolerance = Math.max(16, currentSnapStep() * 1.6);
+      if (info.distance <= tolerance) {
+        const dx = info.to[0] - info.from[0];
+        const dy = info.to[1] - info.from[1];
+        updateSelected({ x: moving.x + dx, y: moving.y + dy });
+        updateSnapFeedback("edge", info);
+      }
+    }
+
+    function serializeState() {
+      return {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        gridSize: Number(gridSizeInput.value) || 20,
+        zoomLevel,
+        baseStrokeWidth,
+        snapEnabled: !!snapCheck.checked,
+        snapStep: currentSnapStep(),
+        guideEnabled: !!guideCheck.checked,
+        gridEnabled: !!gridCheck.checked,
+        selectedId,
+        pieces,
+        configurationMetrics: calculateConfigurationMetrics()
+      };
+    }
+
+    function applyState(data) {
+      if (!data || !Array.isArray(data.pieces)) {
+        throw new Error("Invalid tangram save data.");
+      }
+      pieces = data.pieces;
+      selectedId = data.selectedId && data.pieces.some(p => p.id === data.selectedId)
+        ? data.selectedId
+        : (data.pieces[0]?.id || "largeA");
+      if (typeof data.zoomLevel === "number") {
+        zoomLevel = Math.max(0.25, Math.min(4, data.zoomLevel));
+        zoomInput.value = zoomLevel;
+      }
+      if (typeof data.baseStrokeWidth === "number") {
+        baseStrokeWidth = Math.max(0.5, Math.min(12, data.baseStrokeWidth));
+        strokeWidthInput.value = baseStrokeWidth;
+      }
+      if (typeof data.gridSize === "number") setGridSize(data.gridSize);
+      if (typeof data.snapStep === "number") snapGridScale.value = Math.max(1, data.snapStep);
+      if (typeof data.snapEnabled === "boolean") snapCheck.checked = data.snapEnabled;
+      if (typeof data.guideEnabled === "boolean") guideCheck.checked = data.guideEnabled;
+      if (typeof data.gridEnabled === "boolean") gridCheck.checked = data.gridEnabled;
+      requestRender();
+    }
+
+    function localSaveKey(name) {
+      return `tangram_rescale_demo__${name}`;
+    }
+
+    function setStatus(text) {
+      saveStatusRow.textContent = text;
+    }
+
+    function downloadJson(filename, text) {
+      const blob = new Blob([text], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function renderButtons() {
+      pieceButtons.innerHTML = "";
+      pieces.forEach(piece => {
+        const btn = document.createElement("button");
+        btn.textContent = piece.label;
+        btn.className = piece.id === selectedId ? "active" : "";
+        btn.onclick = () => {
+          selectedId = piece.id;
+          requestRender();
+        };
+        pieceButtons.appendChild(btn);
+      });
+    }
+
+    function renderPieces() {
+      piecesLayer.innerHTML = "";
+      pieces.forEach(piece => {
+        const pts = transformedPoints(piece);
+        const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        poly.setAttribute("points", pointsStr(pts));
+        poly.setAttribute("fill", piece.color);
+        poly.setAttribute("stroke", piece.id === selectedId ? "#111827" : "white");
+        poly.setAttribute("stroke-width", piece.id === selectedId ? String(baseStrokeWidth + 1) : String(baseStrokeWidth));
+        poly.setAttribute("opacity", "0.95");
+        poly.style.cursor = "grab";
+
+        poly.addEventListener("pointerdown", (e) => {
+          poly.setPointerCapture(e.pointerId);
+          selectedId = piece.id;
+          drag = {
+            id: piece.id,
+            startX: e.clientX,
+            startY: e.clientY,
+            ox: piece.x,
+            oy: piece.y
+          };
+          requestRender();
+        });
+
+        const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        c.setAttribute("cx", piece.x);
+        c.setAttribute("cy", piece.y);
+        c.setAttribute("r", piece.id === selectedId ? "5" : "3");
+        c.setAttribute("fill", "#111827");
+
+        group.appendChild(poly);
+        group.appendChild(c);
+        piecesLayer.appendChild(group);
+      });
+    }
+
+    function setGridSize(size) {
+      const safe = Math.max(4, Math.min(80, Number(size) || 20));
+      const pattern = document.getElementById("gridPattern");
+      pattern.setAttribute("width", safe);
+      pattern.setAttribute("height", safe);
+      pattern.querySelector("path").setAttribute("d", `M ${safe} 0 L 0 0 0 ${safe}`);
+      gridSizeInput.value = safe;
+    }
+
+    function currentSnapStep() {
+      return Math.max(1, Number(snapGridScale.value) || 10);
+    }
+
+    function piecesSnapshot() {
+      return pieces.map(p => ({ ...p }));
+    }
+
+    function captureCurrentConfiguration() {
+      const name = (configNameInput.value || `config-${savedConfigs.length + 1}`).trim();
+      if (!name) return;
+      const snapshot = {
+        id: `cfg-${Date.now()}`,
+        name,
+        pieces: piecesSnapshot(),
+        area: totalArea(),
+        configurationMetrics: calculateConfigurationMetrics(),
+        createdAt: new Date().toISOString()
+      };
+      savedConfigs.unshift(snapshot);
+      updateConfigLibrary();
+      updateConfigSelects();
+      configNameInput.value = "";
+    }
+
+    function applySnapshot(snapshot) {
+      pieces = snapshot.pieces.map(p => ({ ...p }));
+      selectedId = snapshot.pieces[0]?.id || "largeA";
+      requestRender();
+    }
+
+    function updateConfigLibrary() {
+      configList.innerHTML = "";
+      if (!savedConfigs.length) {
+        configList.textContent = "No saved configurations yet.";
+        updateConfigSelects();
+        return;
+      }
+      savedConfigs.forEach(cfg => {
+        const entry = document.createElement("div");
+        entry.className = "kv";
+        entry.style.display = "flex";
+        entry.style.justifyContent = "space-between";
+        entry.style.alignItems = "center";
+        entry.style.gap = "8px";
+        const label = document.createElement("span");
+        label.innerHTML = `<strong>${cfg.name}</strong><div class="tiny">captured ${new Date(cfg.createdAt).toLocaleString()}</div>`;
+        const actions = document.createElement("div");
+        actions.style.display = "flex";
+        actions.style.gap = "4px";
+        const loadBtn = document.createElement("button");
+        loadBtn.textContent = "Load";
+        loadBtn.onclick = () => applySnapshot(cfg);
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "Delete";
+        deleteBtn.onclick = () => {
+          const idx = savedConfigs.findIndex(c => c.id === cfg.id);
+          if (idx >= 0) {
+            savedConfigs.splice(idx, 1);
+            updateConfigLibrary();
+            updateConfigSelects();
+          }
+        };
+        actions.appendChild(loadBtn);
+        actions.appendChild(deleteBtn);
+        entry.appendChild(label);
+        entry.appendChild(actions);
+        configList.appendChild(entry);
+      });
+      updateConfigSelects();
+    }
+
+    function updateConfigSelects() {
+      [configSelectA, configSelectB].forEach(select => {
+        const keep = select.value;
+        select.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Select config";
+        select.appendChild(placeholder);
+        savedConfigs.forEach(cfg => {
+          const opt = document.createElement("option");
+          opt.value = cfg.id;
+          opt.textContent = cfg.name;
+          select.appendChild(opt);
+        });
+        if (keep) select.value = keep;
+      });
+    }
+
+    function distanceBetweenSegments(aPts, bPts) {
+      const edges = (pts) => pts.map((p, i) => ({ a: p, b: pts[(i + 1) % pts.length] }));
+      const edgesA = edges(aPts);
+      const edgesB = edges(bPts);
+      let best = { distance: Infinity, from: [0, 0], to: [0, 0] };
+      edgesA.forEach(edge => {
+        edgesB.forEach(target => {
+          [edge.a, edge.b].forEach(point => {
+            const hit = pointSegmentDistance(point[0], point[1], target.a[0], target.a[1], target.b[0], target.b[1]);
+            if (hit.dist < best.distance) {
+              best = { distance: hit.dist, from: point, to: [hit.qx, hit.qy] };
+            }
+          });
+        });
+      });
+      edgesB.forEach(edge => {
+        edgesA.forEach(target => {
+          [edge.a, edge.b].forEach(point => {
+            const hit = pointSegmentDistance(point[0], point[1], target.a[0], target.a[1], target.b[0], target.b[1]);
+            if (hit.dist < best.distance) {
+              best = { distance: hit.dist, from: point, to: [hit.qx, hit.qy] };
+            }
+          });
+        });
+      });
+      return best;
+    }
+
+    function detectGapsBetweenPieces(pieceList, tolerance = 1) {
+      const maxPairs = Math.max(1, pieceList.length * (pieceList.length - 1) / 2);
+      const gaps = [];
+      for (let i = 0; i < pieceList.length; i++) {
+        for (let j = i + 1; j < pieceList.length; j++) {
+          const pieceA = pieceList[i];
+          const pieceB = pieceList[j];
+          const info = distanceBetweenSegments(transformedPoints(pieceA), transformedPoints(pieceB));
+          if (info.distance === Infinity) continue;
+          if (info.distance > tolerance) {
+            gaps.push({
+              distance: info.distance,
+              from: info.from,
+              to: info.to,
+              pieces: [pieceA.id, pieceB.id]
+            });
+          }
+        }
+      }
+      const totalGapDistance = gaps.reduce((sum, gap) => sum + gap.distance, 0);
+      const seamlessScore = 1 - Math.min(1, gaps.length / maxPairs);
+      return { totalGaps: gaps.length, totalGapDistance, seamlessScore, gaps };
+    }
+
+    function renderGapHighlights(gaps) {
+      gapLayer.innerHTML = "";
+      if (!gaps || !gaps.length) return;
+      gaps.forEach(gap => {
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", gap.from[0]);
+        line.setAttribute("y1", gap.from[1]);
+        line.setAttribute("x2", gap.to[0]);
+        line.setAttribute("y2", gap.to[1]);
+        line.setAttribute("stroke", "#ef4444");
+        line.setAttribute("stroke-width", "2");
+        line.setAttribute("stroke-dasharray", "4 3");
+        gapLayer.appendChild(line);
+      });
+    }
+
+    function analyzeVertexMismatch(pieceList) {
+      let best = null;
+      for (let i = 0; i < pieceList.length; i++) {
+        const piece = pieceList[i];
+        const pieceEdges = getEdgesFromPoints(transformedPoints(piece));
+        for (let j = 0; j < pieceList.length; j++) {
+          if (i === j) continue;
+          const other = pieceList[j];
+          const otherEdges = getEdgesFromPoints(transformedPoints(other));
+          pieceEdges.forEach(edge => {
+            otherEdges.forEach(target => {
+              const info = measureEdgePair(edge, target);
+              if (!info || !info.vertexDistances) return;
+              const mismatchDelta = Math.abs(info.vertexDistances[0] - info.vertexDistances[1]);
+              if (!best || mismatchDelta > best.mismatchDelta) {
+                let angleDiff = Math.abs((target.angle - edge.angle) * 180 / Math.PI);
+                if (angleDiff > 180) angleDiff = 360 - angleDiff;
+                best = {
+                  mismatchDelta,
+                  edge,
+                  target,
+                  piece,
+                  targetPiece: other,
+                  angleOffset: angleDiff,
+                  vertexDistances: info.vertexDistances,
+                  vertexLines: info.vertexLines
+                };
+              }
+            });
+          });
+        }
+      }
+      if (!best) return null;
+      const [distA, distB] = best.vertexDistances;
+      const snappedIndex = distA < distB ? 0 : 1;
+      const oppositeIndex = 1 - snappedIndex;
+      const snappedVertexGap = best.vertexDistances[snappedIndex];
+      const oppositeVertexGap = best.vertexDistances[oppositeIndex];
+      const ratio = oppositeVertexGap / Math.max(snappedVertexGap, 0.001);
+      const potential = best.mismatchDelta > 3 ? "VERY HIGH" : best.mismatchDelta > 1.5 ? "HIGH" : best.mismatchDelta > 0.6 ? "MEDIUM" : "LOW";
+      return {
+        pieceLabel: best.piece.label,
+        targetLabel: best.targetPiece.label,
+        edgeIndex: best.edge.index,
+        targetIndex: best.target.index,
+        snappedIndex,
+        oppositeIndex,
+        snappedVertexGap,
+        oppositeVertexGap,
+        mismatchDelta: best.mismatchDelta,
+        mismatchRatio: ratio,
+        mismatchRatioDisplay: `${ratio.toFixed(1)}:1`,
+        angleOffset: best.angleOffset,
+        potential,
+        vertexLines: best.vertexLines
+      };
+    }
+
+    function updateVertexMismatchUI(summary) {
+      if (!summary) {
+        mismatchEdgeRow.textContent = "No vertex mismatch data yet.";
+        mismatchSnappedRow.textContent = "";
+        mismatchOppositeRow.textContent = "";
+        mismatchRatioRow.textContent = "";
+        mismatchAngleRow.textContent = "";
+        mismatchPotentialRow.textContent = "";
+        return;
+      }
+      mismatchEdgeRow.textContent = `${summary.pieceLabel} edge ${summary.edgeIndex} vs ${summary.targetLabel} edge ${summary.targetIndex}`;
+      mismatchSnappedRow.textContent = `Snapped vertex gap: ${summary.snappedVertexGap.toFixed(2)} px`;
+      mismatchOppositeRow.textContent = `Opposite vertex gap: ${summary.oppositeVertexGap.toFixed(2)} px`;
+      mismatchRatioRow.textContent = `Mismatch ratio: ${summary.mismatchRatioDisplay}`;
+      mismatchAngleRow.textContent = `Angular offset: ${summary.angleOffset.toFixed(1)}°`;
+      mismatchPotentialRow.textContent = `Illusion potential: ${summary.potential}`;
+    }
+
+    function renderVertexMismatchHighlights(summary) {
+      if (!mismatchLayer) return;
+      mismatchLayer.innerHTML = "";
+      if (!summary || !summary.vertexLines) return;
+      const colorByPotential = {
+        LOW: "#4ade80",
+        MEDIUM: "#facc15",
+        HIGH: "#fb7185",
+        "VERY HIGH": "#ef4444"
+      };
+      const snappedColor = "#4ade80";
+      const oppositeColor = colorByPotential[summary.potential] || "#fb7185";
+      const drawLine = (from, to, color, dash) => {
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", from[0]);
+        line.setAttribute("y1", from[1]);
+        line.setAttribute("x2", to[0]);
+        line.setAttribute("y2", to[1]);
+        line.setAttribute("stroke", color);
+        line.setAttribute("stroke-width", "2");
+        if (dash) line.setAttribute("stroke-dasharray", dash);
+        line.setAttribute("stroke-linecap", "round");
+        line.style.pointerEvents = "none";
+        mismatchLayer.appendChild(line);
+      };
+      const drawCircle = (point, color) => {
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", point[0]);
+        circle.setAttribute("cy", point[1]);
+        circle.setAttribute("r", "4");
+        circle.setAttribute("fill", color);
+        circle.style.pointerEvents = "none";
+        mismatchLayer.appendChild(circle);
+      };
+      const snappedLine = summary.vertexLines[summary.snappedIndex];
+      const oppositeLine = summary.vertexLines[summary.oppositeIndex];
+      if (snappedLine) {
+        drawLine(snappedLine.point, [snappedLine.qx, snappedLine.qy], snappedColor);
+        drawCircle(snappedLine.point, snappedColor);
+      }
+      if (oppositeLine) {
+        drawLine(oppositeLine.point, [oppositeLine.qx, oppositeLine.qy], oppositeColor, "4 4");
+        drawCircle(oppositeLine.point, oppositeColor);
+      }
+    }
+
+    function getEdgesFromPoints(points) {
+      return points.map((a, idx) => {
+        const b = points[(idx + 1) % points.length];
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        return {
+          a,
+          b,
+          midpoint: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+          angle: Math.atan2(dy, dx),
+          length: Math.hypot(dx, dy),
+          index: idx
+        };
+      });
+    }
+
+    function measureEdgePair(edge, target) {
+      let best = { distance: Infinity, from: edge.a, to: null, vertexIndex: 0 };
+      [[edge.a, 0], [edge.b, 1]].forEach(([point, idx]) => {
+        const hit = pointSegmentDistance(point[0], point[1], target.a[0], target.a[1], target.b[0], target.b[1]);
+        if (hit.dist < best.distance) {
+          best = { distance: hit.dist, from: point, to: [hit.qx, hit.qy], vertexIndex: idx };
+        }
+      });
+      const edgePoints = [edge.a, edge.b];
+      const hits = edgePoints.map(point =>
+        pointSegmentDistance(point[0], point[1], target.a[0], target.a[1], target.b[0], target.b[1])
+      );
+      const vertexDistances = hits.map(hit => hit.dist);
+      const vertexLines = hits.map((hit, idx) => ({
+        ...hit,
+        point: [edgePoints[idx][0], edgePoints[idx][1]]
+      }));
+      return { distance: best.distance, from: best.from, to: best.to, vertexIndex: best.vertexIndex, vertexDistances, vertexLines };
+    }
+
+    function findClosestEdgePair(piece) {
+      const selectedEdges = getEdgesFromPoints(transformedPoints(piece));
+      let best = null;
+      for (const other of pieces) {
+        if (other.id === piece.id) continue;
+        const otherEdges = getEdgesFromPoints(transformedPoints(other));
+        selectedEdges.forEach(edge => {
+          otherEdges.forEach(target => {
+            const result = measureEdgePair(edge, target);
+            if (!best || result.distance < best.distance) {
+              best = { ...result, edge, target, targetPiece: other };
+            }
+          });
+        });
+      }
+      return best;
+    }
+
+    function findClosestVertexMatch(piece) {
+      const pts = transformedPoints(piece);
+      let best = null;
+      for (const other of pieces) {
+        if (other.id === piece.id) continue;
+        const otherPts = transformedPoints(other);
+        pts.forEach((vertex, vertexIndex) => {
+          otherPts.forEach(target => {
+            const dx = target[0] - vertex[0];
+            const dy = target[1] - vertex[1];
+            const dist = Math.hypot(dx, dy);
+            if (!best || dist < best.distance) {
+              best = { distance: dist, vertex, target, vertexIndex, targetPiece: other };
+            }
+          });
+        });
+      }
+      return best;
+    }
+
+    function updateSnapFeedback(type, info) {
+      snapFeedback.mode = snapModeSelect?.value || snapFeedback.mode;
+      if (type === "edge" && info) {
+        snapFeedback.targetPiece = info.targetPiece?.label || info.targetPiece?.id || "unknown";
+        snapFeedback.targetType = "edge";
+        snapFeedback.gap = info.distance;
+        const tolerance = Math.max(0.1, Number(gapToleranceInput.value) || 1.25);
+        snapFeedback.confidence = 1 - Math.min(1, info.distance / tolerance);
+        const mismatchDelta = Math.abs(info.vertexDistances[0] - info.vertexDistances[1]);
+        const asymmetry = info.edge.length ? mismatchDelta / info.edge.length : 0;
+        let angleOffset = Math.abs((info.target.angle - info.edge.angle) * 180 / Math.PI);
+        if (angleOffset > 180) angleOffset = 360 - angleOffset;
+        snapFeedback.mismatch = {
+          delta: mismatchDelta,
+          asymmetry,
+          angleOffset,
+          potential: mismatchDelta > 2 ? "HIGH" : mismatchDelta > 0.5 ? "MEDIUM" : "LOW"
+        };
+        snapFeedback.status = info.distance <= tolerance ? "Aligned" : "Near";
+      } else if (type === "vertex" && info) {
+        snapFeedback.targetPiece = info.targetPiece?.label || info.targetPiece?.id || "unknown";
+        snapFeedback.targetType = "vertex";
+        snapFeedback.gap = info.distance;
+        const tolerance = Math.max(0.1, Number(gapToleranceInput.value) || 1.25);
+        snapFeedback.confidence = 1 - Math.min(1, info.distance / tolerance);
+        snapFeedback.mismatch = null;
+        snapFeedback.status = info.distance <= tolerance ? "Aligned vertex" : "Snapped";
+      }
+    }
+
+    function updateSnapFeedbackUI() {
+      const modeText = snapModeSelect?.selectedOptions?.[0]?.text || snapFeedback.mode;
+      snapModeRow.textContent = `Snap mode: ${modeText}`;
+      snapTargetRow.textContent = `Target piece: ${snapFeedback.targetPiece || "none"} (${snapFeedback.targetType})`;
+      snapGapRow.textContent = `Gap: ${snapFeedback.gap?.toFixed?.(2) ?? "0.00"} px`;
+      if (snapFeedback.mismatch) {
+        snapMismatchRow.textContent = `Mismatch Δ ${snapFeedback.mismatch.delta.toFixed(2)} px, ratio ${(snapFeedback.mismatch.asymmetry * 100).toFixed(1)}%, angle ${snapFeedback.mismatch.angleOffset.toFixed(1)}° (${snapFeedback.mismatch.potential})`;
+      } else {
+        snapMismatchRow.textContent = "Mismatch: n/a";
+      }
+      snapConfidenceRow.textContent = `Confidence: ${(snapFeedback.confidence * 100).toFixed(1)}%`;
+      snapStatusRow.textContent = `Status: ${snapFeedback.status}`;
+    }
+
+    function snapClosestEdge(piece, options = {}) {
+      const info = findClosestEdgePair(piece);
+      if (!info) return false;
+      const maxDistance = options.maxDistance ?? Infinity;
+      if (info.distance > maxDistance) return false;
+      const dx = info.to[0] - info.from[0];
+      const dy = info.to[1] - info.from[1];
+      updateSelected({ x: piece.x + dx, y: piece.y + dy });
+      updateSnapFeedback("edge", info);
+      return true;
+    }
+
+    function snapClosestVertex(piece) {
+      const info = findClosestVertexMatch(piece);
+      if (!info) return false;
+      const dx = info.target[0] - info.vertex[0];
+      const dy = info.target[1] - info.vertex[1];
+      updateSelected({ x: piece.x + dx, y: piece.y + dy });
+      updateSnapFeedback("vertex", info);
+      return true;
+    }
+
+    function applySnapMode(mode) {
+      const piece = selectedPiece();
+      if (!piece) return false;
+      switch (mode) {
+        case "closest-edge":
+          return snapClosestEdge(piece);
+        case "closest-vertex":
+          return snapClosestVertex(piece);
+        case "hybrid":
+          return snapClosestEdge(piece) || snapClosestVertex(piece);
+        case "edge":
+          return snapClosestEdge(piece, { maxDistance: Math.max(16, currentSnapStep() * 1.6) });
+        default:
+          return false;
+      }
+    }
+
+    function handleSnapOnRelease() {
+      const mode = snapModeSelect?.value || "grid";
+      snapFeedback.mode = mode;
+      const piece = selectedPiece();
+      if (!piece) return;
+      const snapped = applySnapMode(mode);
+      if (!snapped && (mode === "edge" || snapCheck.checked)) {
+        snapSelectedToEdge();
+      }
+    }
+
+    function refreshAnalysis() {
+      const area = totalArea();
+      const tolerance = Math.max(0, Number(gapToleranceInput.value) || 1.25);
+      const gapResult = detectGapsBetweenPieces(pieces, tolerance);
+      lastGapResult = gapResult;
+      totalGapsRow.textContent = `Detected gaps: ${gapResult.totalGaps}`;
+      seamlessScoreRow.textContent = `Seamlessness score: ${gapResult.seamlessScore.toFixed(3)}`;
+      gapVisualsRow.textContent = `Gap highlights ${gapResult.gaps.length ? "on" : "idle"}, tolerance ${tolerance.toFixed(2)}`;
+      renderGapHighlights(gapResult.gaps);
+      const mismatchSummary = analyzeVertexMismatch(pieces);
+      lastVertexMismatch = mismatchSummary;
+      updateVertexMismatchUI(mismatchSummary);
+      renderVertexMismatchHighlights(mismatchSummary);
+
+      const coverage = Math.min(area, ILLUSION_REFERENCE_AREA) / Math.max(area, ILLUSION_REFERENCE_AREA);
+      const illusionConfidence = Math.max(0, Math.min(1, coverage));
+      const isIllusion = illusionConfidence > 0.98;
+      analysisAreaRow.textContent = `Current configuration area: ${area.toFixed(2)}`;
+      analysisGapsRow.textContent = `Gap count: ${gapResult.totalGaps}`;
+      analysisGapDistanceRow.textContent = `Total gap distance: ${gapResult.totalGapDistance.toFixed(2)}`;
+      analysisSeamlessRow.textContent = `Seamless score: ${gapResult.seamlessScore.toFixed(3)}`;
+      analysisIllusionRow.textContent = `Illusion proximity: ${(illusionConfidence * 100).toFixed(1)}% ${isIllusion ? "(target met)" : "(fine-tune pieces)"}`;
+      analysisReferenceRow.textContent = `Reference area (half smallest piece): ${ILLUSION_REFERENCE_AREA.toFixed(2)}`;
+      updateSnapFeedbackUI();
+    }
+
+    function handleAnalysisMode() {
+      const mode = analysisModeSelect.value;
+      comparisonPanel.style.display = mode === "compare" ? "block" : "none";
+      if (mode === "compare") {
+        compareConfigs();
+      }
+    }
+
+    function compareConfigs() {
+      const cfgA = savedConfigs.find(cfg => cfg.id === configSelectA.value);
+      const cfgB = savedConfigs.find(cfg => cfg.id === configSelectB.value);
+      if (!cfgA || !cfgB) {
+        comparisonAreaDiffRow.textContent = "Select two configurations to compare.";
+        comparisonSeamlessRow.textContent = "";
+        comparisonGapEquivRow.textContent = "";
+        comparisonIllusionRow.textContent = "";
+        return;
+      }
+      const result = compareConfigurations(cfgA, cfgB);
+      displayComparisonResult(result);
+    }
+
+    function compareConfigurations(config1, config2) {
+      const tolerance = Math.max(0, Number(gapToleranceInput.value) || 1.25);
+      const gaps1 = detectGapsBetweenPieces(config1.pieces, tolerance);
+      const gaps2 = detectGapsBetweenPieces(config2.pieces, tolerance);
+      const area1 = config1.pieces.reduce((sum, p) => sum + pieceArea(p), 0);
+      const area2 = config2.pieces.reduce((sum, p) => sum + pieceArea(p), 0);
+      const areaDifference = Math.abs(area1 - area2);
+      const areaRatio = area2 === 0 ? 0 : area1 / area2;
+      const gapEquivalence = 1 - Math.min(1, Math.abs(gaps1.seamlessScore - gaps2.seamlessScore));
+      const illusionConfidence = 1 - Math.min(1, areaDifference / Math.max(area1, area2, 1));
+      return {
+        config1Name: config1.name,
+        config2Name: config2.name,
+        area1,
+        area2,
+        areaDifference,
+        areaRatio,
+        gaps1Seamless: gaps1.seamlessScore,
+        gaps2Seamless: gaps2.seamlessScore,
+        gapEquivalence,
+        illusionConfidence,
+        isIllusion: illusionConfidence > 0.95
+      };
+    }
+
+    function displayComparisonResult(result) {
+      comparisonAreaDiffRow.textContent = `${result.config1Name} vs ${result.config2Name}: area diff ${result.areaDifference.toFixed(2)} (ratio ${result.areaRatio.toFixed(2)})`;
+      comparisonSeamlessRow.textContent = `Seamless scores: ${result.gaps1Seamless.toFixed(3)} / ${result.gaps2Seamless.toFixed(3)}`;
+      comparisonGapEquivRow.textContent = `Gap equivalence: ${(result.gapEquivalence * 100).toFixed(1)}%`;
+      comparisonIllusionRow.textContent = `Illusion confidence: ${(result.illusionConfidence * 100).toFixed(1)}% ${result.isIllusion ? "(matching)" : "(different area)"}`;
+    }
+
+    function render() {
+      renderButtons();
+      renderPieces();
+      updateReadout();
+      refreshAnalysis();
+    }
+
+function requestRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    render();  // ✅ CORRECT
+  });
+}
+
+    function updateSelected(patch) {
+      pieces = pieces.map(p => p.id === selectedId ? { ...p, ...patch } : p);
+      requestRender();
+    }
+
+    function nudge(dx, dy) {
+      const p = selectedPiece();
+      if (!p) return;
+      let nx = p.x + dx;
+      let ny = p.y + dy;
+      const snapped = snapPoint(nx, ny);
+      updateSelected({ x: snapped[0], y: snapped[1] });
+    }
+
+    svg.addEventListener("pointerdown", (e) => {
+      if (e.target === svg || e.target === gridRect || e.target === gapLayer || e.target === mismatchLayer) {
+        selectedId = null;
+        requestRender();
+      }
+    });
+
+    svg.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const piece = pieces.find(p => p.id === drag.id);
+      let nx = drag.ox + (e.clientX - drag.startX);
+      let ny = drag.oy + (e.clientY - drag.startY);
+      const snapped = snapPoint(nx, ny);
+      nx = snapped[0];
+      ny = snapped[1];
+      piece.x = nx;
+      piece.y = ny;
+      requestRender();
+    });
+
+    svg.addEventListener("pointerup", () => {
+      if (drag) handleSnapOnRelease();
+      drag = null;
+    });
+    svg.addEventListener("pointerleave", () => { drag = null; });
+    window.addEventListener("blur", () => { drag = null; });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) drag = null;
+    });
+
+    scaleRange.addEventListener("input", () => {
+      if (!selectedPiece()) return;
+      updateSelected({ scale: parseFloat(scaleRange.value) });
+    });
+
+    document.getElementById("rotMinus").onclick = () => {
+      const p = selectedPiece();
+      if (!p) return;
+      updateSelected({ rot: p.rot - 45 });
+    };
+    document.getElementById("rotPlus").onclick = () => {
+      const p = selectedPiece();
+      if (!p) return;
+      updateSelected({ rot: p.rot + 45 });
+    };
+    document.getElementById("mirrorBtn").onclick = () => {
+      const p = selectedPiece();
+      if (!p) return;
+      updateSelected({ mirror: !p.mirror });
+    };
+    document.getElementById("resetPieceBtn").onclick = () => updateSelected({ scale: 1, rot: 0, mirror: false });
+    document.getElementById("leftBtn").onclick = () => nudge(-10, 0);
+    document.getElementById("rightBtn").onclick = () => nudge(10, 0);
+    document.getElementById("upBtn").onclick = () => nudge(0, -10);
+    document.getElementById("downBtn").onclick = () => nudge(0, 10);
+    spawnPieceBtn.onclick = () => {
+      const kind = spawnKindSelect.value;
+      const id = `spawn_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const label = nextPieceLabel(kind);
+      const color = colorForKind(kind);
+      let x = 400;
+      let y = 280;
+      const snapped = snapPoint(x, y);
+      x = snapped[0];
+      y = snapped[1];
+      pieces.push({ id, label, kind, x, y, rot: 0, scale: 1, mirror: false, color });
+      selectedId = id;
+      requestRender();
+    };
+
+    function removePiece(pieceId) {
+      if (!pieceId) return;
+      pieces = pieces.filter(p => p.id !== pieceId);
+      if (selectedId === pieceId) {
+        selectedId = pieces[0]?.id || null;
+      }
+      requestRender();
+    }
+
+    selectNoneBtn.addEventListener("click", () => {
+      if (!selectedId) return;
+      selectedId = null;
+      requestRender();
+    });
+
+    removePieceBtn.addEventListener("click", () => {
+      if (!selectedId) return;
+      removePiece(selectedId);
+    });
+
+    saveLocalBtn.onclick = () => {
+      try {
+        const name = (saveNameInput.value || "tangram-save-01").trim();
+        localStorage.setItem(localSaveKey(name), JSON.stringify(serializeState(), null, 2));
+        setStatus(`Saved locally as “${name}”.`);
+      } catch (err) {
+        setStatus(`Local save failed: ${err.message}`);
+      }
+    };
+
+    loadLocalBtn.onclick = () => {
+      try {
+        const name = (saveNameInput.value || "tangram-save-01").trim();
+        const raw = localStorage.getItem(localSaveKey(name));
+        if (!raw) {
+          setStatus(`No local save found for “${name}”.`);
+          return;
+        }
+        applyState(JSON.parse(raw));
+        setStatus(`Loaded local save “${name}”.`);
+      } catch (err) {
+        setStatus(`Local load failed: ${err.message}`);
+      }
+    };
+
+    exportJsonBtn.onclick = () => {
+      try {
+        const name = (saveNameInput.value || "tangram-save-01").trim();
+        downloadJson(`${name}.json`, JSON.stringify(serializeState(), null, 2));
+        setStatus(`Exported JSON as ${name}.json`);
+      } catch (err) {
+        setStatus(`Export failed: ${err.message}`);
+      }
+    };
+
+    importJsonBtn.onclick = () => importJsonInput.click();
+
+    importJsonInput.addEventListener("change", async () => {
+      const file = importJsonInput.files && importJsonInput.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        applyState(JSON.parse(text));
+        setStatus(`Imported JSON “${file.name}”.`);
+      } catch (err) {
+        setStatus(`Import failed: ${err.message}`);
+      } finally {
+        importJsonInput.value = "";
+      }
+    });
+
+    document.getElementById("resetAllBtn").onclick = () => {
+      pieces = cloneInitial();
+      selectedId = "largeA";
+      requestRender();
+      setStatus("Reset full demo.");
+    };
+
+    document.getElementById("presetScatter").onclick = () => {
+      pieces = cloneInitial();
+      selectedId = "largeA";
+      requestRender();
+    };
+
+    document.getElementById("presetSquare").onclick = () => {
+      pieces = [
+        { id: "largeA", label: "Large A", kind: "largeTri", x: 290, y: 190, rot: 0, scale: 1, mirror: false, color: COLORS.largeA },
+        { id: "largeB", label: "Large B", kind: "largeTri", x: 510, y: 370, rot: 180, scale: 1, mirror: false, color: COLORS.largeB },
+        { id: "medium", label: "Medium", kind: "mediumTri", x: 450, y: 230, rot: 45, scale: 1, mirror: false, color: COLORS.medium },
+        { id: "smallA", label: "Small A", kind: "smallTri", x: 330, y: 330, rot: 90, scale: 1, mirror: false, color: COLORS.smallA },
+        { id: "smallB", label: "Small B", kind: "smallTri", x: 470, y: 180, rot: 0, scale: 1, mirror: false, color: COLORS.smallB },
+        { id: "square", label: "Square", kind: "square", x: 390, y: 310, rot: 0, scale: 1, mirror: false, color: COLORS.square },
+        { id: "lozenge", label: "Lozenge", kind: "lozenge", x: 470, y: 290, rot: 45, scale: 1, mirror: false, color: COLORS.lozenge }
+      ];
+      selectedId = "largeA";
+      requestRender();
+    };
+
+    guideCheck.addEventListener("change", render);
+    toggleToolsBtn.addEventListener("click", () => {
+      const collapsed = sidePanel.classList.toggle("collapsed");
+      app.style.gridTemplateColumns = collapsed ? "1fr" : "320px 1fr";
+      toggleToolsBtn.textContent = collapsed ? "Show tools" : "Hide tools";
+    });
+    applyGridBtn.addEventListener("click", () => setGridSize(gridSizeInput.value));
+    applyZoomBtn.addEventListener("click", () => {
+      zoomLevel = Math.max(0.25, Math.min(4, Number(zoomInput.value) || 1));
+      zoomInput.value = zoomLevel;
+      requestRender();
+    });
+    edgeModeSelect.addEventListener("change", () => requestRender());
+    strokeWidthInput.addEventListener("input", () => {
+      baseStrokeWidth = Math.max(0.5, Math.min(12, Number(strokeWidthInput.value) || 2));
+      requestRender();
+    });
+    applyLongestEdgeBtn.addEventListener("click", () => {
+      const p = selectedPiece();
+      if (!p) return;
+      const currentEdge = selectedEdgeMetric(p);
+      const target = Math.max(0.001, Number(longestEdgeInput.value) || currentEdge);
+      const ratio = target / currentEdge;
+      updateSelected({ scale: p.scale * ratio });
+    });
+    gridSizeInput.addEventListener("change", () => setGridSize(gridSizeInput.value));
+    gridCheck.addEventListener("change", render);
+    gapToleranceInput.addEventListener("input", () => requestRender());
+    captureConfigBtn.addEventListener("click", captureCurrentConfiguration);
+    syncConfigsBtn.addEventListener("click", () => {
+      updateConfigLibrary();
+      updateConfigSelects();
+    });
+    analysisModeSelect.addEventListener("change", handleAnalysisMode);
+    compareConfigsBtn.addEventListener("click", compareConfigs);
+    configSelectA.addEventListener("change", () => {
+      if (analysisModeSelect.value === "compare") compareConfigs();
+    });
+    configSelectB.addEventListener("change", () => {
+      if (analysisModeSelect.value === "compare") compareConfigs();
+    });
+    snapModeSelect.addEventListener("change", () => {
+      snapFeedback.mode = snapModeSelect.value;
+      updateSnapFeedbackUI();
+    });
+
+    updateConfigLibrary();
+    handleAnalysisMode();
+    requestRender();
+  </script>
+</body>
+</html>
